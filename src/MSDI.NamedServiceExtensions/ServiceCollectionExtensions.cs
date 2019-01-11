@@ -16,7 +16,7 @@ namespace MSDI.NamedServiceExtensions
         /// <typeparam name="TService">The type of service to add.</typeparam>
         /// <typeparam name="TImplementation">The implementation type for the service.</typeparam>
         /// <typeparam name="TTarget">The target type that this implementation should be used for.</typeparam>
-        /// <param name="serviceCollection"></param>
+        /// <param name="serviceCollection">The collection of service descriptors.</param>
         /// <param name="serviceLifetime">The lifetime of the service.</param>
         /// <returns>The <see cref="IServiceCollection"/>.</returns>
         public static IServiceCollection AddServiceFor<TService, TImplementation, TTarget>(
@@ -84,7 +84,7 @@ namespace MSDI.NamedServiceExtensions
         /// </summary>
         /// <typeparam name="TService">The type of service to add.</typeparam>
         /// <typeparam name="TImplementation">The implementation type for the service.</typeparam>
-        /// <param name="serviceCollection"></param>
+        /// <param name="serviceCollection">The collection of service descriptors.</param>
         /// <param name="name">The name to register the service against.</param>
         /// <param name="lifetime">The lifetime of the service.</param>
         /// <returns>The <see cref="IServiceCollection"/>.</returns>
@@ -115,6 +115,64 @@ namespace MSDI.NamedServiceExtensions
                     serviceCollection.AddTransient<TImplementation>();
                     break;
             }
+
+            return serviceCollection;
+        }
+
+        /// <summary>
+        /// Adds a service to the collection specifying what named dependencies to assign to named parameters.
+        /// </summary>
+        /// <typeparam name="TService">The type of service to add.</typeparam>
+        /// <typeparam name="TImplementation">The implementation type for the service.</typeparam>
+        /// <param name="serviceCollection">The collection of service descriptors.</param>
+        /// <param name="lifetime">The lifetime of the service.</param>
+        /// <param name="dependencies">
+        /// The collection of named dependencies.
+        /// {registeredType, registeredName, parameterName}
+        /// </param>
+        /// <returns>The <see cref="IServiceCollection"/>.</returns>
+        public static IServiceCollection AddServiceWithNamedDependencies<TService, TImplementation>(
+            this IServiceCollection serviceCollection,
+            ServiceLifetime lifetime,
+            params Tuple<Type, string, string>[] dependencies)
+            where TImplementation : class
+        {
+            INamedServiceFactory[] factories = serviceCollection.Where(x => typeof(INamedServiceFactory).IsAssignableFrom(x.ServiceType))
+                .Select(x => x.ImplementationInstance).Cast<INamedServiceFactory>().ToArray();
+
+            // Now register our service type. This uses our factory to determine the type to tell the provider to resolve for our specified type
+            // and resolves all other types as normal via the provider.
+            ConstructorInfo constructorInfo = typeof(TImplementation).GetConstructors().Last();
+            ParameterInfo[] parameters = constructorInfo.GetParameters();
+            serviceCollection.Add(new ServiceDescriptor(typeof(TService), p =>
+            {
+                object[] args = new object[parameters.Length];
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    ParameterInfo parameter = parameters[i];
+                    string parameterName = parameter.Name;
+                    Type parameterType = parameter.ParameterType;
+
+                    // Our named type? 
+                    // First check the parameter type and name.
+                    Tuple<Type, string, string> dependency = Array.Find(dependencies, x => x.Item1 == parameterType && x.Item3 == parameterName);
+                    if (dependency != null)
+                    {
+                        // Now check we have a factory.
+                        INamedServiceFactory factory = Array.Find(factories, x => x.ServiceType == dependency.Item1);
+                        if (factory != null)
+                        {
+                            // Get the dependency by name.
+                            args[i] = factory.Resolve(dependency.Item2, p);
+                            continue;
+                        }
+                    }
+
+                    args[i] = p.GetService(parameterType);
+                }
+
+                return Activator.CreateInstance(typeof(TImplementation), args);
+            }, lifetime));
 
             return serviceCollection;
         }

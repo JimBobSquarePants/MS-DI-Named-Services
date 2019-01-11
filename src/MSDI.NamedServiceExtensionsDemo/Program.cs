@@ -26,6 +26,16 @@ namespace MSDI.NamedServiceExtensionsDemo
             // This adds both types at the same time.
             services.AddServiceFor<IService, ServiceC, ConsumerC>(ServiceLifetime.Transient, ServiceLifetime.Transient);
 
+            // Add a sevice with named dependencies tied to parameter names.
+            services.AddNamedService<IService, ServiceD>(nameof(ServiceD), ServiceLifetime.Transient);
+            services.AddNamedService<IService, ServiceE>(nameof(ServiceE), ServiceLifetime.Transient);
+            var args2 = new Tuple<Type, string, string>[]{
+                // {registeredType, registeredName, parameterName}
+                Tuple.Create(typeof(IService), nameof(ServiceD), "serviceX"),
+                Tuple.Create(typeof(IService), nameof(ServiceE), "serviceY")
+            };
+            services.AddServiceWithNamedDependencies<ConsumerD, ConsumerD>(ServiceLifetime.Transient, args2);
+
             // Resolve our two types. They should now output different injected types.
             Console.WriteLine("Resolved types:");
             Console.WriteLine();
@@ -33,6 +43,7 @@ namespace MSDI.NamedServiceExtensionsDemo
             ConsumerA a = provider.GetService<ConsumerA>();
             ConsumerB b = provider.GetService<ConsumerB>();
             ConsumerC c = provider.GetService<ConsumerC>();
+            ConsumerD d = provider.GetService<ConsumerD>();
 
             Console.ReadLine();
         }

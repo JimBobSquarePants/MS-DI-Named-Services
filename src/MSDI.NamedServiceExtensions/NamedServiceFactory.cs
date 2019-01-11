@@ -7,10 +7,32 @@ namespace MSDI.NamedServiceExtensions
     /// <summary>
     /// A factory for resolving named services.
     /// </summary>
+    internal interface INamedServiceFactory
+    {
+        /// <summary>
+        /// Gets the service type.
+        /// </summary>
+        Type ServiceType { get; }
+
+        /// <summary>
+        /// Resolves the service type matching the given name. 
+        /// </summary>
+        /// <param name="name">The name the service type is registered as.</param>
+        /// <param name="provider">The service provider for retrieving service objects.</param>
+        /// <returns>The <see cref="object"/></returns>
+        object Resolve(string name, IServiceProvider provider);
+    }
+
+    /// <summary>
+    /// A factory for resolving named services.
+    /// </summary>
     /// <typeparam name="TService">The type of service to resolve.</typeparam>
-    internal class NamedServiceFactory<TService>
+    internal class NamedServiceFactory<TService> : INamedServiceFactory
     {
         private readonly ConcurrentDictionary<CompositeStringTypeKey, Type> namedServices = new ConcurrentDictionary<CompositeStringTypeKey, Type>();
+
+        /// <inheritdoc/>
+        public Type ServiceType { get; } = typeof(TService);
 
         /// <summary>
         /// Registers the given implementation type with the name.
@@ -26,15 +48,18 @@ namespace MSDI.NamedServiceExtensions
         /// </summary>
         /// <param name="provider">The service provider for retrieving service objects.</param>
         /// <param name="name">The name the service type is registered as.</param>
-        /// <returns></returns>
-        public TService Resolve(IServiceProvider provider, string name)
+        /// <returns>The <see cref="TService"/></returns>
+        public TService Resolve(IServiceProvider provider, string name) => (TService)this.Resolve(name, provider);
+
+        /// <inheritdoc/>
+        public object Resolve(string name, IServiceProvider provider)
         {
             if (!this.namedServices.TryGetValue(new CompositeStringTypeKey(name, typeof(TService)), out Type implementation))
             {
                 throw new InvalidOperationException($"No service for type {typeof(TService)} named '{name}' has been registered.");
             }
 
-            return (TService)provider.GetService(implementation);
+            return provider.GetService(implementation);
         }
 
         private readonly struct CompositeStringTypeKey : IEquatable<CompositeStringTypeKey>

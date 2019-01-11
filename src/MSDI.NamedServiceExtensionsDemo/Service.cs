@@ -27,4 +27,18 @@ namespace MSDI.NamedServiceExtensions
 
         public ServiceC(DateTime date) => this.Date = date;
     }
+
+    public class ServiceD : IService
+    {
+        public DateTime Date { get; }
+
+        public ServiceD(DateTime date) => this.Date = date;
+    }
+
+    public class ServiceE : IService
+    {
+        public DateTime Date { get; }
+
+        public ServiceE(DateTime date) => this.Date = date;
+    }
 }
