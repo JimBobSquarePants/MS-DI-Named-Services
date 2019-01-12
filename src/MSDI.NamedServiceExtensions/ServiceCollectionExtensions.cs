@@ -26,38 +26,13 @@ namespace MSDI.NamedServiceExtensions
             where TImplementation : class
             where TTarget : class
         {
-            ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(NamedServiceFactory<TService>));
-            var factory = descriptor?.ImplementationInstance as NamedServiceFactory<TService>;
-            if (factory is null)
-            {
-                factory = new NamedServiceFactory<TService>();
-                serviceCollection.AddSingleton(factory);
-            }
-
             string name = typeof(TImplementation).FullName + ":" + typeof(TTarget).FullName;
-            factory.Register<TImplementation>(name);
-            Type targetType = typeof(TTarget);
-
-            // We don't want to register using the service descriptor since that would mean multiple TService types
-            // would be registered causing resolution problems for non-named registrations.
-            switch (serviceLifetime)
-            {
-                case ServiceLifetime.Singleton:
-                    serviceCollection.AddSingleton<TImplementation>();
-                    break;
-                case ServiceLifetime.Scoped:
-                    serviceCollection.AddScoped<TImplementation>();
-                    break;
-                case ServiceLifetime.Transient:
-                    serviceCollection.AddTransient<TImplementation>();
-                    break;
-            }
+            RegisterNamedService<TService, TImplementation>(serviceCollection, name, serviceLifetime);
 
             // Now register our target type. This uses our factory to determine the type to tell the provider to resolve for our specified type
             // and resolves all other types as normal via the provider.
-            ConstructorInfo constructorInfo = targetType.GetConstructors().Last(x => x.GetParameters().Any(y => y.ParameterType == typeof(TService)));
-            ParameterInfo[] parameters = constructorInfo.GetParameters();
-            serviceCollection.Add(new ServiceDescriptor(typeof(TTarget), p =>
+            ParameterInfo[] parameters = GetConstructorParameters<TTarget>();
+            serviceCollection.Add(new ServiceDescriptor(typeof(TTarget), provider =>
             {
                 object[] args = new object[parameters.Length];
                 for (int i = 0; i < parameters.Length; i++)
@@ -66,11 +41,11 @@ namespace MSDI.NamedServiceExtensions
                     Type parameterType = parameters[i].ParameterType;
                     if (parameterType == typeof(TService))
                     {
-                        args[i] = p.GetNamedService<TService>(name);
+                        args[i] = provider.GetNamedService<TService>(name);
                         continue;
                     }
 
-                    args[i] = p.GetService(parameterType);
+                    args[i] = provider.GetService(parameterType);
                 }
 
                 return Activator.CreateInstance(typeof(TTarget), args);
@@ -91,31 +66,7 @@ namespace MSDI.NamedServiceExtensions
         public static IServiceCollection AddNamedService<TService, TImplementation>(this IServiceCollection serviceCollection, string name, ServiceLifetime lifetime)
             where TImplementation : class
         {
-            ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(NamedServiceFactory<TService>));
-            var factory = descriptor?.ImplementationInstance as NamedServiceFactory<TService>;
-            if (factory is null)
-            {
-                factory = new NamedServiceFactory<TService>();
-                serviceCollection.AddSingleton(factory);
-            }
-
-            factory.Register<TImplementation>(name);
-
-            // We don't want to register using the service descriptor since that would mean multiple TService types
-            // would be registered causing resolution problems for non-named registrations.
-            switch (lifetime)
-            {
-                case ServiceLifetime.Singleton:
-                    serviceCollection.AddSingleton<TImplementation>();
-                    break;
-                case ServiceLifetime.Scoped:
-                    serviceCollection.AddScoped<TImplementation>();
-                    break;
-                case ServiceLifetime.Transient:
-                    serviceCollection.AddTransient<TImplementation>();
-                    break;
-            }
-
+            RegisterNamedService<TService, TImplementation>(serviceCollection, name, lifetime);
             return serviceCollection;
         }
 
@@ -142,9 +93,8 @@ namespace MSDI.NamedServiceExtensions
 
             // Now register our service type. This uses our factory to determine the type to tell the provider to resolve for our specified type
             // and resolves all other types as normal via the provider.
-            ConstructorInfo constructorInfo = typeof(TImplementation).GetConstructors().Last();
-            ParameterInfo[] parameters = constructorInfo.GetParameters();
-            serviceCollection.Add(new ServiceDescriptor(typeof(TService), p =>
+            ParameterInfo[] parameters = GetConstructorParameters<TImplementation>();
+            serviceCollection.Add(new ServiceDescriptor(typeof(TService), provider =>
             {
                 object[] args = new object[parameters.Length];
                 for (int i = 0; i < parameters.Length; i++)
@@ -163,12 +113,12 @@ namespace MSDI.NamedServiceExtensions
                         if (factory != null)
                         {
                             // Get the dependency by name.
-                            args[i] = factory.Resolve(dependency.Item2, p);
+                            args[i] = factory.Resolve(dependency.Item2, provider);
                             continue;
                         }
                     }
 
-                    args[i] = p.GetService(parameterType);
+                    args[i] = provider.GetService(parameterType);
                 }
 
                 return Activator.CreateInstance(typeof(TImplementation), args);
@@ -193,6 +143,50 @@ namespace MSDI.NamedServiceExtensions
             }
 
             return factory.Resolve(provider, name);
+        }
+
+        private static void RegisterNamedService<TService, TImplementation>(IServiceCollection serviceCollection, string name, ServiceLifetime lifetime)
+            where TImplementation : class
+        {
+            ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(NamedServiceFactory<TService>));
+            var factory = descriptor?.ImplementationInstance as NamedServiceFactory<TService>;
+            if (factory is null)
+            {
+                factory = new NamedServiceFactory<TService>();
+                serviceCollection.AddSingleton(factory);
+            }
+
+            factory.Register<TImplementation>(name);
+
+            // We don't want to register using the service descriptor since that would mean multiple TService types
+            // would be registered causing resolution problems for non-named registrations.
+            switch (lifetime)
+            {
+                case ServiceLifetime.Singleton:
+                    serviceCollection.AddSingleton<TImplementation>();
+                    break;
+                case ServiceLifetime.Scoped:
+                    serviceCollection.AddScoped<TImplementation>();
+                    break;
+                case ServiceLifetime.Transient:
+                    serviceCollection.AddTransient<TImplementation>();
+                    break;
+            }
+        }
+
+        private static ParameterInfo[] GetConstructorParameters<T>()
+        {
+            ParameterInfo[] parameters = Array.Empty<ParameterInfo>();
+
+            // Get the shortest public instance constructor.
+            ConstructorInfo constructorInfo = typeof(T).GetConstructors().OrderBy(x => (parameters = x.GetParameters()).Length).FirstOrDefault();
+
+            if (constructorInfo is null)
+            {
+                throw new InvalidOperationException($"No public instance contructor found for type {typeof(T).Name}.");
+            }
+
+            return parameters;
         }
     }
 }
