@@ -62,6 +62,9 @@ namespace MSDI.NamedServiceExtensions
             return provider.GetService(implementation);
         }
 
+        /// <summary>
+        /// Used for super fast dictionary key lookups.
+        /// </summary>
         private readonly struct CompositeStringTypeKey : IEquatable<CompositeStringTypeKey>
         {
             public CompositeStringTypeKey(string name, Type type)

@@ -34,8 +34,13 @@ namespace MSDI.NamedServiceExtensions
 
     public class ConsumerC
     {
-        public ConsumerC(IService service)
+        public ConsumerC(IService service, TimeSpan timeSpan)
         {
+            if (timeSpan != TimeSpan.MaxValue)
+            {
+                throw new ArgumentException(nameof(timeSpan));
+            }
+
             this.Service = service;
             string name = this.Service.GetType().Name;
             Console.WriteLine($"Consumer Type: {this.GetType().Name}");
@@ -49,8 +54,13 @@ namespace MSDI.NamedServiceExtensions
 
     public class ConsumerD
     {
-        public ConsumerD(IService serviceX, IService serviceY)
+        public ConsumerD(IService serviceX, TimeSpan timeSpan, IService serviceY)
         {
+            if (timeSpan != TimeSpan.MaxValue)
+            {
+                throw new ArgumentException(nameof(timeSpan));
+            }
+
             this.ServiceX = serviceX;
             string nameX = this.ServiceX.GetType().Name;
             this.ServiceY = serviceY;

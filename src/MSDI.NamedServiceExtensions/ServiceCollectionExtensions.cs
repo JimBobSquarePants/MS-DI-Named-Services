@@ -27,29 +27,16 @@ namespace MSDI.NamedServiceExtensions
             where TTarget : class
         {
             string name = typeof(TImplementation).FullName + ":" + typeof(TTarget).FullName;
-            RegisterNamedService<TService, TImplementation>(serviceCollection, name, serviceLifetime);
+            AddNamedServiceImpl<TService, TImplementation>(serviceCollection, name, serviceLifetime);
 
-            // Now register our target type. This uses our factory to determine the type to tell the provider to resolve for our specified type
+            // Now register our target type. 
+            // This uses our factory to determine the type to tell the provider to resolve for our specified type
             // and resolves all other types as normal via the provider.
-            ParameterInfo[] parameters = GetConstructorParameters<TTarget>();
-            serviceCollection.Add(new ServiceDescriptor(typeof(TTarget), provider =>
-            {
-                object[] args = new object[parameters.Length];
-                for (int i = 0; i < parameters.Length; i++)
-                {
-                    // Our named type? 
-                    Type parameterType = parameters[i].ParameterType;
-                    if (parameterType == typeof(TService))
-                    {
-                        args[i] = provider.GetNamedService<TService>(name);
-                        continue;
-                    }
-
-                    args[i] = provider.GetService(parameterType);
-                }
-
-                return Activator.CreateInstance(typeof(TTarget), args);
-            }, targetLifetime));
+            serviceCollection.Add(new ServiceDescriptor(
+                typeof(TTarget),
+                provider =>
+                ActivatorUtilities.CreateInstance<TTarget>(provider, provider.GetNamedService<TService>(name)),
+                targetLifetime));
 
             return serviceCollection;
         }
@@ -66,7 +53,7 @@ namespace MSDI.NamedServiceExtensions
         public static IServiceCollection AddNamedService<TService, TImplementation>(this IServiceCollection serviceCollection, string name, ServiceLifetime lifetime)
             where TImplementation : class
         {
-            RegisterNamedService<TService, TImplementation>(serviceCollection, name, lifetime);
+            AddNamedServiceImpl<TService, TImplementation>(serviceCollection, name, lifetime);
             return serviceCollection;
         }
 
@@ -85,40 +72,44 @@ namespace MSDI.NamedServiceExtensions
         public static IServiceCollection AddServiceWithNamedDependencies<TService, TImplementation>(
             this IServiceCollection serviceCollection,
             ServiceLifetime lifetime,
-            params Tuple<Type, string, string>[] dependencies)
+            params NamedDependency[] dependencies)
             where TImplementation : class
         {
             INamedServiceFactory[] factories = serviceCollection.Where(x => typeof(INamedServiceFactory).IsAssignableFrom(x.ServiceType))
                 .Select(x => x.ImplementationInstance).Cast<INamedServiceFactory>().ToArray();
 
-            // Now register our service type. This uses our factory to determine the type to tell the provider to resolve for our specified type
-            // and resolves all other types as normal via the provider.
-            ParameterInfo[] parameters = GetConstructorParameters<TImplementation>();
+            // Gather a set of parameters from our target ttype that best match our named dependencies.
+            ParameterInfo[] parameters = GetMatchingConstructorParameters<TImplementation>(dependencies);
+
+            // Create an array of parameter factories that we can pass to our target factory.
+            // We can reuse this for every request keeping overheads low and performance high.
+            var argsFactory = new Func<IServiceProvider, object>[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                ParameterInfo parameter = parameters[i];
+                string parameterName = parameter.Name;
+                Type parameterType = parameter.ParameterType;
+
+                NamedDependency dependency = Array.Find(dependencies, x => x.ParameterName == parameterName && parameterType.IsAssignableFrom(x.ServiceType));
+                if (dependency != default)
+                {
+                    INamedServiceFactory factory = Array.Find(factories, x => x.ServiceType == dependency.ServiceType);
+                    if (factory != null)
+                    {
+                        argsFactory[i] = p => factory.Resolve(dependency.ServiceName, p);
+                        continue;
+                    }
+                }
+
+                argsFactory[i] = p => p.GetService(parameterType);
+            }
+
             serviceCollection.Add(new ServiceDescriptor(typeof(TService), provider =>
             {
-                object[] args = new object[parameters.Length];
-                for (int i = 0; i < parameters.Length; i++)
+                object[] args = new object[argsFactory.Length];
+                for (int i = 0; i < argsFactory.Length; i++)
                 {
-                    ParameterInfo parameter = parameters[i];
-                    string parameterName = parameter.Name;
-                    Type parameterType = parameter.ParameterType;
-
-                    // Our named type? 
-                    // First check the parameter type and name.
-                    Tuple<Type, string, string> dependency = Array.Find(dependencies, x => x.Item1 == parameterType && x.Item3 == parameterName);
-                    if (dependency != null)
-                    {
-                        // Now check we have a factory.
-                        INamedServiceFactory factory = Array.Find(factories, x => x.ServiceType == dependency.Item1);
-                        if (factory != null)
-                        {
-                            // Get the dependency by name.
-                            args[i] = factory.Resolve(dependency.Item2, provider);
-                            continue;
-                        }
-                    }
-
-                    args[i] = provider.GetService(parameterType);
+                    args[i] = argsFactory[i].Invoke(provider);
                 }
 
                 return Activator.CreateInstance(typeof(TImplementation), args);
@@ -145,7 +136,7 @@ namespace MSDI.NamedServiceExtensions
             return factory.Resolve(provider, name);
         }
 
-        private static void RegisterNamedService<TService, TImplementation>(IServiceCollection serviceCollection, string name, ServiceLifetime lifetime)
+        private static void AddNamedServiceImpl<TService, TImplementation>(IServiceCollection serviceCollection, string name, ServiceLifetime lifetime)
             where TImplementation : class
         {
             ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(NamedServiceFactory<TService>));
@@ -174,16 +165,37 @@ namespace MSDI.NamedServiceExtensions
             }
         }
 
-        private static ParameterInfo[] GetConstructorParameters<T>()
+        private static ParameterInfo[] GetMatchingConstructorParameters<T>(params NamedDependency[] dependencies)
         {
+            int bestMatch = 0;
             ParameterInfo[] parameters = Array.Empty<ParameterInfo>();
+            ConstructorInfo[] constructorInfos = typeof(T).GetConstructors();
 
-            // Get the shortest public instance constructor.
-            ConstructorInfo constructorInfo = typeof(T).GetConstructors().OrderBy(x => (parameters = x.GetParameters()).Length).FirstOrDefault();
-
-            if (constructorInfo is null)
+            // Loop through the constructors. 
+            // We look for the constructor that has largest number of matching parameters.
+            for (int i = 0; i < constructorInfos.Length; i++)
             {
-                throw new InvalidOperationException($"No public instance contructor found for type {typeof(T).Name}.");
+                int currentMatch = 0;
+                ParameterInfo[] currentParameters = constructorInfos[i].GetParameters();
+                for (int j = 0; j < currentParameters.Length; j++)
+                {
+                    ParameterInfo parameter = currentParameters[j];
+                    for (int k = 0; k < dependencies.Length; k++)
+                    {
+                        NamedDependency dependency = dependencies[k];
+                        if (parameter.Name == dependency.ParameterName
+                            && parameter.ParameterType.IsAssignableFrom(dependency.ServiceType))
+                        {
+                            currentMatch++;
+                        }
+                    }
+
+                    if (currentMatch > bestMatch)
+                    {
+                        bestMatch = currentMatch;
+                        parameters = currentParameters;
+                    }
+                }
             }
 
             return parameters;
