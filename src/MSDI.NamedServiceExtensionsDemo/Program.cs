@@ -38,7 +38,7 @@ namespace MSDI.NamedServiceExtensionsDemo
                 new NamedDependency(typeof(IService), nameof(ServiceE), "serviceY")
             };
 
-            services.AddServiceWithNamedDependencies<ConsumerD, ConsumerD>(ServiceLifetime.Transient, args2);
+            services.AddServiceWithNamedDependencies<IConsumerD, ConsumerD>(ServiceLifetime.Transient, args2);
 
             // Resolve our two types. They should now output different injected types.
             Console.WriteLine("Resolved types:");
@@ -47,7 +47,7 @@ namespace MSDI.NamedServiceExtensionsDemo
             ConsumerA a = provider.GetService<ConsumerA>();
             ConsumerB b = provider.GetService<ConsumerB>();
             ConsumerC c = provider.GetService<ConsumerC>();
-            ConsumerD d = provider.GetService<ConsumerD>();
+            IConsumerD d = provider.GetService<IConsumerD>();
 
             Console.ReadLine();
         }

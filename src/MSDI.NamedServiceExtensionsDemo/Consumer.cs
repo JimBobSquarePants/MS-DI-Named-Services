@@ -52,7 +52,13 @@ namespace MSDI.NamedServiceExtensions
         public IService Service { get; }
     }
 
-    public class ConsumerD
+    public interface IConsumerD
+    {
+        IService ServiceX { get; }
+        IService ServiceY { get; }
+    }
+
+    public class ConsumerD : IConsumerD
     {
         public ConsumerD(IService serviceX, TimeSpan timeSpan, IService serviceY)
         {
