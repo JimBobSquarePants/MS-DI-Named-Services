@@ -79,7 +79,7 @@ namespace MSDI.NamedServiceExtensions
                 .Select(x => x.ImplementationInstance).Cast<INamedServiceFactory>().ToArray();
 
             // Gather a set of parameters from our target ttype that best match our named dependencies.
-            ParameterInfo[] parameters = GetMatchingConstructorParameters<TImplementation>(dependencies);
+            ParameterInfo[] parameters = GetMatchingConstructorParameters<TImplementation>(out ConstructorInfo constructorInfo, dependencies);
 
             // Create an array of parameter factories that we can pass to our target factory.
             // We can reuse this for every request keeping overheads low and performance high.
@@ -112,7 +112,7 @@ namespace MSDI.NamedServiceExtensions
                     args[i] = argsFactory[i].Invoke(provider);
                 }
 
-                return Activator.CreateInstance(typeof(TImplementation), args);
+                return constructorInfo.Invoke(args);
             }, lifetime));
 
             return serviceCollection;
@@ -165,9 +165,10 @@ namespace MSDI.NamedServiceExtensions
             }
         }
 
-        private static ParameterInfo[] GetMatchingConstructorParameters<T>(params NamedDependency[] dependencies)
+        private static ParameterInfo[] GetMatchingConstructorParameters<T>(out ConstructorInfo constructorInfo, params NamedDependency[] dependencies)
         {
             int bestMatch = 0;
+            constructorInfo = null;
             ParameterInfo[] parameters = Array.Empty<ParameterInfo>();
             ConstructorInfo[] constructorInfos = typeof(T).GetConstructors();
 
@@ -194,6 +195,7 @@ namespace MSDI.NamedServiceExtensions
                     {
                         bestMatch = currentMatch;
                         parameters = currentParameters;
+                        constructorInfo = constructorInfos[i];
                     }
                 }
             }
