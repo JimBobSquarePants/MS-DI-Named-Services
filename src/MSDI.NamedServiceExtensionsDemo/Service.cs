@@ -7,6 +7,13 @@ namespace MSDI.NamedServiceExtensions
         DateTime Date { get; }
     }
 
+    public class ServiceDefault : IService
+    {
+        public DateTime Date { get; }
+
+        public ServiceDefault(DateTime date) => this.Date = date;
+    }
+
     public class ServiceA : IService
     {
         public DateTime Date { get; }
