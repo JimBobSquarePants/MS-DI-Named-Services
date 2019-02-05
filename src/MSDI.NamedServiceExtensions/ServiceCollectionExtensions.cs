@@ -57,6 +57,12 @@ namespace MSDI.NamedServiceExtensions
             return serviceCollection;
         }
 
+        public static IServiceCollection AddNamedService(this IServiceCollection serviceCollection, Type serviceType, Type implementationType, string name, ServiceLifetime lifetime)
+        {
+            AddNamedServiceImpl(serviceCollection, serviceType, implementationType, name, lifetime);
+            return serviceCollection;
+        }
+
         /// <summary>
         /// Adds a service to the collection specifying what named dependencies to assign to named parameters.
         /// </summary>
@@ -96,7 +102,7 @@ namespace MSDI.NamedServiceExtensions
                     INamedServiceFactory factory = Array.Find(factories, x => x.ServiceType == dependency.ServiceType);
                     if (factory != null)
                     {
-                        argsFactory[i] = p => factory.Resolve(dependency.ServiceName, p);
+                        argsFactory[i] = p => factory.Resolve(p, dependency.ServiceName);
                         continue;
                     }
                 }
@@ -127,40 +133,50 @@ namespace MSDI.NamedServiceExtensions
         /// <returns>The <see cref="TService"/>.</returns>
         public static TService GetNamedService<TService>(this IServiceProvider provider, string name)
         {
-            NamedServiceFactory<TService> factory = provider.GetServices<NamedServiceFactory<TService>>().LastOrDefault();
+            INamedServiceFactory factory = provider
+                .GetServices<INamedServiceFactory>()
+                .LastOrDefault(x => x.ServiceType == typeof(TService));
             if (factory is null)
             {
                 throw new InvalidOperationException($"No service for type {typeof(TService)} named '{name}' has been registered.");
             }
 
-            return factory.Resolve(provider, name);
+            return (TService)factory.Resolve(provider, name);
         }
 
         private static void AddNamedServiceImpl<TService, TImplementation>(IServiceCollection serviceCollection, string name, ServiceLifetime lifetime)
             where TImplementation : class
         {
-            ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(NamedServiceFactory<TService>));
-            var factory = descriptor?.ImplementationInstance as NamedServiceFactory<TService>;
+            var serviceType = typeof(TService);
+            var implementationType = typeof(TImplementation);
+            AddNamedServiceImpl(serviceCollection, serviceType, implementationType, name, lifetime);
+        }
+
+        private static void AddNamedServiceImpl(IServiceCollection serviceCollection, Type serviceType, Type implementationType, string name, ServiceLifetime lifetime)
+        {
+            var factoryType = typeof(NamedServiceFactory<>).MakeGenericType(serviceType);
+            ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(INamedServiceFactory) && ((INamedServiceFactory)x.ImplementationInstance).ServiceType == serviceType);
+            var factory = descriptor?.ImplementationInstance as INamedServiceFactory;
             if (factory is null)
             {
-                factory = new NamedServiceFactory<TService>();
+                factory = (INamedServiceFactory) factoryType.GetConstructor(new Type[0]).Invoke(new object[0]);
                 serviceCollection.AddSingleton(factory);
             }
 
-            factory.Register<TImplementation>(name);
+            factory.Register(name, implementationType);
 
             // We don't want to register using the service descriptor since that would mean multiple TService types
             // would be registered causing resolution problems for non-named registrations.
             switch (lifetime)
             {
                 case ServiceLifetime.Singleton:
-                    serviceCollection.AddSingleton<TImplementation>();
+                    serviceCollection.AddSingleton(implementationType);
                     break;
                 case ServiceLifetime.Scoped:
-                    serviceCollection.AddScoped<TImplementation>();
+                    serviceCollection.AddScoped(implementationType);
                     break;
                 case ServiceLifetime.Transient:
-                    serviceCollection.AddTransient<TImplementation>();
+                    serviceCollection.AddTransient(implementationType);
                     break;
             }
         }

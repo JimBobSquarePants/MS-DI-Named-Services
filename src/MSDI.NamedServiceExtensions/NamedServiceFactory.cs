@@ -17,10 +17,12 @@ namespace MSDI.NamedServiceExtensions
         /// <summary>
         /// Resolves the service type matching the given name. 
         /// </summary>
-        /// <param name="name">The name the service type is registered as.</param>
         /// <param name="provider">The service provider for retrieving service objects.</param>
+        /// <param name="name">The name the service type is registered as.</param>
         /// <returns>The <see cref="object"/></returns>
-        object Resolve(string name, IServiceProvider provider);
+        object Resolve(IServiceProvider provider, string name);
+
+        void Register(string name, Type implementationType);
     }
 
     /// <summary>
@@ -41,7 +43,16 @@ namespace MSDI.NamedServiceExtensions
         /// <param name="name">The name to register the type as.</param>
         public void Register<TImplementation>(string name)
             where TImplementation : class
-            => this.namedServices.TryAdd(new CompositeStringTypeKey(name, typeof(TService)), typeof(TImplementation));
+        {
+            var implementationType = typeof(TImplementation);
+            Register(name, implementationType);
+        }
+
+        public void Register(string name, Type implementationType)
+        {
+            var serviceType = typeof(TService);
+            this.namedServices.TryAdd(new CompositeStringTypeKey(name, serviceType), implementationType);
+        }
 
         /// <summary>
         /// Resolves the service type matching the given name. 
@@ -49,10 +60,10 @@ namespace MSDI.NamedServiceExtensions
         /// <param name="provider">The service provider for retrieving service objects.</param>
         /// <param name="name">The name the service type is registered as.</param>
         /// <returns>The <see cref="TService"/></returns>
-        public TService Resolve(IServiceProvider provider, string name) => (TService)this.Resolve(name, provider);
+        public TService Resolve(IServiceProvider provider, string name) => (TService)((INamedServiceFactory)this).Resolve(provider, name);
 
         /// <inheritdoc/>
-        public object Resolve(string name, IServiceProvider provider)
+        object INamedServiceFactory.Resolve(IServiceProvider provider, string name)
         {
             if (!this.namedServices.TryGetValue(new CompositeStringTypeKey(name, typeof(TService)), out Type implementation))
             {

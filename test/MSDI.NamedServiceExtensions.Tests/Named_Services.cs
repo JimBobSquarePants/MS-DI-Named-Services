@@ -27,21 +27,21 @@ namespace MSDI.NamedServiceExtensions.Tests
             Assert.That(resolved, Is.InstanceOf<ServiceA>());
         }
 
-        //[Test]
-        //public void Are_Resolved_Explicitly_From_Typed_Registration()
-        //{
-        //    services.AddNamedService(typeof(IService), typeof(ServiceA), "A name", ServiceLifetime.Transient);
-        //    var provider = services.BuildServiceProvider();
-        //    var resolved = provider.GetNamedService<IService>("A name");
-        //    Assert.That(resolved, Is.InstanceOf<ServiceA>());
-        //}
+        [Test]
+        public void Are_Resolved_Explicitly_From_Type_Registration()
+        {
+            services.AddNamedService(typeof(IService), typeof(ServiceA), "A name", ServiceLifetime.Transient);
+            var provider = services.BuildServiceProvider();
+            var resolved = provider.GetNamedService<IService>("A name");
+            Assert.That(resolved, Is.InstanceOf<ServiceA>());
+        }
 
         [Test]
         public void Are_Specified_For_Dependents()
         {
             services.AddNamedService<IService, ServiceA>("A name", ServiceLifetime.Transient);
 
-            RegisterResolveAndAssertConsumerCWithServiceA();
+            AssertConsumerWithNamedServiceA();
         }
 
         [Test]
@@ -50,10 +50,10 @@ namespace MSDI.NamedServiceExtensions.Tests
             services.AddNamedService<IService, ServiceA>("A name", ServiceLifetime.Transient);
             services.AddNamedService<IService, ServiceB>("Another name", ServiceLifetime.Transient);
 
-            RegisterResolveAndAssertConsumerCWithServiceA();
+            AssertConsumerWithNamedServiceA();
         }
 
-        private void RegisterResolveAndAssertConsumerCWithServiceA()
+        private void AssertConsumerWithNamedServiceA()
         {
             services.AddServiceWithNamedDependencies<IConsumerXY, ConsumerC>(
                 ServiceLifetime.Transient,
