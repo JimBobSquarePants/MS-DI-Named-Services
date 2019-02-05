@@ -53,6 +53,43 @@ namespace MSDI.NamedServiceExtensions.Tests
             AssertConsumerWithNamedServiceA();
         }
 
+        [Test]
+        public void Are_Specified_Amongst_Many_For_Individual_Parameters()
+        {
+            AssertConsumerDWithServiceDAndE();
+        }
+
+        [Test]
+        public void Ignores_Defaults()
+        {
+            services.AddTransient<IService, ServiceDefault>();
+            services.AddTransient<IConsumerXY, ConsumerE>();
+
+            AssertConsumerDWithServiceDAndE();
+        }
+
+        private void AssertConsumerDWithServiceDAndE()
+        {
+            services.AddNamedService<IService, ServiceD>(nameof(ServiceD), ServiceLifetime.Transient);
+            services.AddNamedService<IService, ServiceE>(nameof(ServiceE), ServiceLifetime.Transient);
+
+            var dependencies = new[]
+            {
+                new NamedDependency(typeof(IService), nameof(ServiceD), "serviceX"),
+                new NamedDependency(typeof(IService), nameof(ServiceE), "serviceY")
+            };
+
+            services.AddServiceWithNamedDependencies<IConsumerXY, ConsumerD>(ServiceLifetime.Transient, dependencies);
+
+            var provider = services.BuildServiceProvider();
+            var consumer = (ConsumerD) provider.GetService<IConsumerXY>();
+
+            Assert.That(consumer, Has
+                .Property("ServiceX").InstanceOf<ServiceD>().And
+                .Property("ServiceY").InstanceOf<ServiceE>()
+            );
+        }
+
         private void AssertConsumerWithNamedServiceA()
         {
             services.AddServiceWithNamedDependencies<IConsumerXY, ConsumerC>(
