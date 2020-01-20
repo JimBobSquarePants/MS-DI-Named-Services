@@ -15,7 +15,7 @@ IServiceCollection.AddNamedService<TService, TImplementation>(string name, Servi
 IServiceCollection.AddServiceFor<TService, TImplementation, TTarget>(ServiceLifetime serviceLifetime, ServiceLifetime targetLifetime);
 
 // Adds a service to the collection specifying what named dependencies to assign to named parameters.
-IServiceCollection.AddServiceWithNamedDependencies<TService, TImplementation>(            ServiceLifetime lifetime, params NamedDependency[] dependencies)
+IServiceCollection.AddServiceWithNamedDependencies<TService, TImplementation>(ServiceLifetime lifetime, params NamedDependency[] dependencies)
 ```  
     
 **Retrieve**   
