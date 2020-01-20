@@ -11,7 +11,7 @@ namespace MSDI.NamedServiceExtensions
     public static class ServiceCollectionExtensions
     {
         /// <summary>
-        /// Adds a service/implementation relationship to the collectior for the given target type. 
+        /// Adds a service/implementation relationship to the collection for the given target type. 
         /// </summary>
         /// <typeparam name="TService">The type of service to add.</typeparam>
         /// <typeparam name="TImplementation">The implementation type for the service.</typeparam>
@@ -40,6 +40,19 @@ namespace MSDI.NamedServiceExtensions
 
             return serviceCollection;
         }
+
+        /// <summary>
+        /// Adds a service/implementation relationship to the collection, keyed to the type name
+        /// of the concrete implementation. 
+        /// </summary>
+        /// <typeparam name="TService">The type of service to add.</typeparam>
+        /// <typeparam name="TImplementation">The implementation type for the service.</typeparam>
+        /// <param name="serviceCollection">The collection of service descriptors.</param>
+        /// <param name="lifetime">The lifetime of the service.</param>
+        /// <returns>The <see cref="IServiceCollection"/>.</returns>
+        public static IServiceCollection AddNamedService<TService, TImplementation>(this IServiceCollection serviceCollection, ServiceLifetime lifetime)
+            where TImplementation : class
+            => AddNamedService<TService, TImplementation>(serviceCollection, typeof(TImplementation).Name, lifetime);
 
         /// <summary>
         /// Adds a service/implementation relationship to the collection, keyed to the given name. 
