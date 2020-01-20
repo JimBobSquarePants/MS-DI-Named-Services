@@ -1,4 +1,4 @@
-# Microst Dependency Injection Using Named Services
+# Microsoft Dependency Injection Using Named Services
 
 A demonstration of how to use the Microsoft Dependency Injection Abstractions to register named services including registering as parameters named or otherwise.  
   
