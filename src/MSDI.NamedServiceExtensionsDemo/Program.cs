@@ -21,7 +21,8 @@ namespace MSDI.NamedServiceExtensionsDemo
             // Add a default IServiceImplementation
             services.AddTransient<IService, ServiceDefault>();
 
-            // Add our named targets. These are resolved using the service locator in the target ctrs.
+            // Add our named targets. These are resolved using the service locator in the target ctrs
+            // via provider.GetNamedService<IService>(name).
             services.AddNamedService<IService, ServiceA>(nameof(ServiceA), ServiceLifetime.Transient);
             services.AddNamedService<IService, ServiceB>(nameof(ServiceB), ServiceLifetime.Transient);
             services.AddTransient<ConsumerA>();

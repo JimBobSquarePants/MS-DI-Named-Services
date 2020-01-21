@@ -91,7 +91,7 @@ namespace MSDI.NamedServiceExtensions
             INamedServiceFactory[] factories = serviceCollection.Where(x => typeof(INamedServiceFactory).IsAssignableFrom(x.ServiceType))
                 .Select(x => x.ImplementationInstance).Cast<INamedServiceFactory>().ToArray();
 
-            // Gather a set of parameters from our target ttype that best match our named dependencies.
+            // Gather a set of parameters from our target type that best match our named dependencies.
             ParameterInfo[] parameters = GetMatchingConstructorParameters<TImplementation>(out ConstructorInfo constructorInfo, dependencies);
 
             // Create an array of parameter factories that we can pass to our target factory.
@@ -153,8 +153,7 @@ namespace MSDI.NamedServiceExtensions
             where TImplementation : class
         {
             ServiceDescriptor descriptor = serviceCollection.LastOrDefault(x => x.ServiceType == typeof(NamedServiceFactory<TService>));
-            var factory = descriptor?.ImplementationInstance as NamedServiceFactory<TService>;
-            if (factory is null)
+            if (!(descriptor?.ImplementationInstance is NamedServiceFactory<TService> factory))
             {
                 factory = new NamedServiceFactory<TService>();
                 serviceCollection.AddSingleton(factory);
